@@ -245,9 +245,9 @@ body { display: flex; justify-content: center; align-items: center; }
 .mentor-card .name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
 .mentor-card .info { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
 .mentor-card .cost { font-size: 14px; color: var(--warning); margin-top: 8px; font-weight: 600; }
-.sponsor-card .name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-.sponsor-card .info { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
-.sponsor-card .amount { font-size: 14px; color: var(--success); margin-top: 8px; font-weight: 600; }
+.sponsor-card .name { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.sponsor-card .info { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+.sponsor-card .amount { font-size: 12px; color: var(--success); margin-top: 4px; font-weight: 600; }
 
 .hired-list, .signed-list {
   display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; min-height: 32px;
@@ -265,9 +265,7 @@ body { display: flex; justify-content: center; align-items: center; }
   text-align: center; padding: 20px;
   border-top: 1px solid var(--border-color); margin-top: 20px;
   flex-shrink: 0;
-  position: sticky; bottom: 0;
   background: var(--bg-primary);
-  z-index: 10;
 }
 
 /* ============================================================
@@ -2296,7 +2294,7 @@ body { display: flex; justify-content: center; align-items: center; }
   }
 
   function getSpecialtyLabel(s) {
-    const map = { vocal: '声乐', dance: '舞蹈', rap: '说唱', comprehensive: '综合', performance: '舞台表现' };
+    const map = { vocal: '声乐', dance: '舞蹈', rap: '说唱', host: '主持' };
     return map[s] || s;
   }
 
@@ -2604,22 +2602,44 @@ body { display: flex; justify-content: center; align-items: center; }
     const hiredIds = new Set(hired.map(m => m.id));
     const container = $('mentorPool');
     const funds = engine.getFunds ? engine.getFunds() : 0;
-    container.innerHTML = pool.map(m => {
-      const disabled = hiredIds.has(m.id) || funds < m.cost;
-      const priceDisplay = m.originalCost 
-        ? `<div class="mentor-price-display"><span class="price-original">${fmtMoney(m.originalCost)}万</span> <span class="price-discount">${m.discountReason || ''}</span> ${fmtMoney(m.cost)}万</div>`
-        : `<div class="cost">${fmtMoney(m.cost)}万</div>`;
-      return `<div class="card mentor-card" data-mentor-id="${m.id}" style="${disabled ? 'opacity:0.4;pointer-events:none;' : ''}">
-        <div class="tier">${m.tier}</div>
-        <div class="name">${m.name}</div>
-        <div class="info">
-          专业：${getSpecialtyLabel(m.specialty)}<br>
-          风格：${getStrictnessLabel(m.strictness)}<br>
-          话题度：${m.topicHeat}
-        </div>
-        ${priceDisplay}
-      </div>`;
-    }).join('');
+
+    // 过滤掉舞台表现和综合，只保留host/舞蹈/说唱/声乐
+    const allowedSpecialties = new Set(['host', 'dance', 'rap', 'vocal']);
+    const filtered = pool.filter(m => allowedSpecialties.has(m.specialty));
+
+    // 按分类分组
+    const categoryOrder = ['host', 'dance', 'rap', 'vocal'];
+    const categoryLabels = { host: '🎤 主持', dance: '💃 舞蹈', rap: '🎤 说唱', vocal: '🎵 声乐' };
+    const grouped = {};
+    for (const m of filtered) {
+      if (!grouped[m.specialty]) grouped[m.specialty] = [];
+      grouped[m.specialty].push(m);
+    }
+
+    let html = '';
+    for (const cat of categoryOrder) {
+      const mentors = grouped[cat];
+      if (!mentors || mentors.length === 0) continue;
+      html += `<div style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">${categoryLabels[cat] || cat}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;">`;
+      for (const m of mentors) {
+        const disabled = hiredIds.has(m.id) || funds < m.cost;
+        const priceDisplay = m.originalCost
+          ? `<div style="font-size:11px;"><span style="text-decoration:line-through;color:var(--text-muted);">${fmtMoney(m.originalCost)}万</span> <span style="color:var(--warning);font-weight:600;">${fmtMoney(m.cost)}万</span></div>`
+          : `<div style="font-size:12px;color:var(--warning);font-weight:600;">${fmtMoney(m.cost)}万</div>`;
+        html += `<div class="card mentor-card" data-mentor-id="${m.id}" style="${disabled ? 'opacity:0.4;pointer-events:none;' : ''}padding:10px;">
+          <div class="tier" style="font-size:12px;">${m.tier}</div>
+          <div class="name" style="font-size:14px;">${m.name}</div>
+          <div class="info" style="font-size:11px;">
+            风格：${getStrictnessLabel(m.strictness)} · 话题度：${m.topicHeat}
+          </div>
+          ${priceDisplay}
+        </div>`;
+      }
+      html += `</div></div>`;
+    }
+    container.innerHTML = html;
   }
 
   function renderHiredList() {
@@ -2673,11 +2693,11 @@ body { display: flex; justify-content: center; align-items: center; }
           <span style="font-weight:600;color:var(--text-primary);">${type}品牌</span>
           ${isRestricted ? '<span style="color:var(--warning);font-size:11px;">⚠️ 同类型品牌只能选择一个</span>' : ''}
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;">`;
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;">`;
 
       for (const sponsor of (data.available || [])) {
         const canSign = !(isRestricted);
-        html += `<div class="card sponsor-card ${canSign ? '' : 'disabled'}" data-sponsor-id="${sponsor.id}" style="opacity:${canSign ? '1' : '0.5'};">
+        html += `<div class="card sponsor-card ${canSign ? '' : 'disabled'}" data-sponsor-id="${sponsor.id}" style="opacity:${canSign ? '1' : '0.5'};padding:10px;">
           <div class="name">${sponsor.name}</div>
           <div class="info">要求：${(sponsor.requirements || []).join('、')}</div>
           <div class="amount">+${fmtMoney(sponsor.amount)}万</div>
@@ -2686,10 +2706,10 @@ body { display: flex; justify-content: center; align-items: center; }
       }
 
       for (const sponsor of (data.signed || [])) {
-        html += `<div class="card sponsor-card" style="border-color:var(--success);">
+        html += `<div class="card sponsor-card" style="border-color:var(--success);padding:10px;">
           <div class="name">${sponsor.name}</div>
           <div class="amount">+${fmtMoney(sponsor.amount)}万</div>
-          <div style="color:var(--success);font-size:12px;">✓ 已签约</div>
+          <div style="color:var(--success);font-size:11px;">✓ 已签约</div>
         </div>`;
       }
 
