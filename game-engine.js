@@ -4167,7 +4167,7 @@
         '彻底退出娱乐圈，回归普通人生活，偶尔被路人认出'
       ];
 
-      // 第一轮：收集所有未出道选手的规则匹配结果
+      // 第一轮：收集所有选手的规则匹配结果（包括出道组和未出道组）
       const rule6Candidates = [];
       const tempResults = [];
       
@@ -4180,9 +4180,19 @@
           const posStr = positions.join(' & ');
           const popularityChange = Math.round((Math.random() - 0.4) * 30);
           const popTrend = popularityChange > 10 ? '人气飙升' : popularityChange > 0 ? '人气稳步上升' : popularityChange > -10 ? '人气略有下滑' : '人气大幅下跌';
-          let story = '团体定位：' + posStr + '。两年团体活动中' + popTrend + '，积累了稳定的粉丝基础。';
-          story += '组合解散后，' + this._generateSoloCareerStory(t, careerMap, careerTemplates);
-          tempResults.push({ trainee: t, isDebuted: true, story });
+          // 出道组也需要匹配规则，以便统一处理规则6
+          const result = this._matchCareerRule(t, careerMap, careerTemplates);
+          tempResults.push({ 
+            trainee: t, 
+            isDebuted: true, 
+            rule: result.rule, 
+            story: result.story,
+            positionStr: posStr,
+            popTrend: popTrend
+          });
+          if (result.rule === 6) {
+            rule6Candidates.push(t.id);
+          }
         } else {
           const result = this._matchCareerRule(t, careerMap, careerTemplates);
           tempResults.push({ trainee: t, isDebuted: false, rule: result.rule, story: result.story });
@@ -4206,12 +4216,18 @@
         const t = result.trainee;
         let story = result.story;
         
-        if (!result.isDebuted && result.rule === 6) {
+        // 处理规则6的情况
+        if (result.rule === 6) {
           if (t.id === gameMakerId) {
             story = '彻底退出娱乐圈，在家宅了半年后突发奇想，制作了一款"选秀导演模拟器"游戏，意外爆火';
           } else {
             story = pick(otherFailTemplates);
           }
+        }
+        
+        // 出道组需要添加团体定位前缀
+        if (result.isDebuted) {
+          story = '团体定位：' + result.positionStr + '。两年团体活动中' + result.popTrend + '，积累了稳定的粉丝基础。组合解散后，' + story;
         }
         
         developments.push({ traineeId: t.id, name: t.name, rank: t.currentRank || t.rank, debuted: result.isDebuted, story });
@@ -4265,14 +4281,6 @@
 
       // 优先级6：均不符合（标记为规则6，后续处理）
       return { rule: 6, story: '' };
-    }
-
-    _generateSoloCareerStory(trainee, careerMap, careerTemplates) {
-      const result = this._matchCareerRule(trainee, careerMap, careerTemplates);
-      if (result.rule === 6) {
-        return '彻底退出娱乐圈，在家宅了半年后突发奇想，制作了一款"选秀导演模拟器"游戏，意外爆火';
-      }
-      return result.story;
     }
   }
 
