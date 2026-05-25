@@ -4368,7 +4368,7 @@ body { display: flex; justify-content: center; align-items: center; }
     const panel = $('inviteArtistPanel');
     if (!panel) return;
 
-    const episode = engine.getEpisode ? engine.getEpisode() : 1;
+    const episode = engine.getCurrentEpisode ? engine.getCurrentEpisode() : 1;
     // 公演期前：一公(episode=3)前是episode=2，二公(episode=6)前是episode=5，三公(episode=9)前是episode=8
     const isBeforeShow = [2, 5, 8].includes(episode);
     
