@@ -4368,23 +4368,40 @@ body { display: flex; justify-content: center; align-items: center; }
     const panel = $('inviteArtistPanel');
     if (!panel) return;
 
+    const episode = engine.getEpisode ? engine.getEpisode() : 1;
+    // 公演期前：一公(episode=3)前是episode=2，二公(episode=6)前是episode=5，三公(episode=9)前是episode=8
+    const isBeforeShow = [2, 5, 8].includes(episode);
+    
+    if (!isBeforeShow) {
+      // 非公演期前，隐藏面板
+      panel.parentElement.style.display = 'none';
+      return;
+    }
+    
+    panel.parentElement.style.display = 'block';
+
     const options = engine.getArtistOptions ? engine.getArtistOptions() : [];
     const invited = engine.getInvitedArtists ? engine.getInvitedArtists() : [];
     const funds = engine.getFunds ? engine.getFunds() : 0;
 
+    // 添加"不邀请"选项
+    const noInviteOption = { type: 'none', name: '不邀请', cost: 0, desc: '路人粉-3%，CP粉-1%' };
+    const allOptions = [...options, noInviteOption];
+
     let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;">';
 
-    for (const opt of options) {
+    for (const opt of allOptions) {
       const isInvited = invited.find(a => a.type === opt.type);
       const canAfford = funds >= opt.cost;
+      const isNoInvite = opt.type === 'none';
 
-      html += `<div class="card" style="padding:10px;${isInvited ? 'border-color:var(--success);opacity:0.7;' : ''}${!canAfford && !isInvited ? 'opacity:0.4;pointer-events:none;' : ''}">
+      html += `<div class="card" style="padding:10px;${isInvited ? 'border-color:var(--success);opacity:0.7;' : ''}${!canAfford && !isInvited && !isNoInvite ? 'opacity:0.4;pointer-events:none;' : ''}">
         <div style="font-weight:600;font-size:13px;">${opt.name}</div>
         <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${opt.desc}</div>
-        <div style="font-size:13px;color:var(--warning);font-weight:600;margin-top:4px;">${opt.cost}万</div>
+        ${opt.cost > 0 ? `<div style="font-size:13px;color:var(--warning);font-weight:600;margin-top:4px;">${opt.cost}万</div>` : ''}
         ${isInvited
-          ? '<div style="color:var(--success);font-size:11px;margin-top:4px;">✓ 已邀请</div>'
-          : `<button class="btn btn-sm btn-success invite-artist-btn" data-type="${opt.type}" style="margin-top:4px;">邀请</button>`
+          ? '<div style="color:var(--success);font-size:11px;margin-top:4px;">✓ 已选择</div>'
+          : `<button class="btn btn-sm ${isNoInvite ? 'btn-outline' : 'btn-success'} invite-artist-btn" data-type="${opt.type}" style="margin-top:4px;">${isNoInvite ? '不邀请' : '邀请'}</button>`
         }
       </div>`;
     }
@@ -4392,7 +4409,8 @@ body { display: flex; justify-content: center; align-items: center; }
     html += '</div>';
 
     if (invited.length > 0) {
-      html += '<div style="margin-top:8px;font-size:11px;color:var(--text-muted);">本期已邀请：' + invited.map(a => a.name).join('、') + '</div>';
+      const invitedName = invited[0].type === 'none' ? '不邀请' : invited[0].name;
+      html += '<div style="margin-top:8px;font-size:11px;color:var(--text-muted);">本期选择：' + invitedName + '</div>';
     }
 
     panel.innerHTML = html;

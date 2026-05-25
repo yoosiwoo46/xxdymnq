@@ -1411,11 +1411,33 @@
     inviteArtist(artistType) {
       if (!this.state) return { success: false, message: '游戏未初始化' };
 
+      // 检查本期是否已选择
+      if (this.state.invitedArtists && this.state.invitedArtists.length > 0) {
+        return { success: false, message: '本期已做出选择' };
+      }
+
+      // 不邀请选项
+      if (artistType === 'none') {
+        const artist = {
+          id: generateId(),
+          type: 'none',
+          name: '不邀请',
+          cost: 0,
+          ratingBoost: 0,
+          passerbyBoost: -0.03,
+          cpBoost: -0.01,
+          soloBoost: 0,
+          episode: this.state.episode
+        };
+        this.state.invitedArtists.push(artist);
+        return { success: true, message: '本期不邀请外部艺人', artist: artist };
+      }
+
       const artistConfig = {
-        star: { name: '当红爱豆', cost: 4000, ratingBoost: 3, passerbyBoost: 0.10, cpBoost: 0.15, soloBoost: 0.05 },
-        singer: { name: '实力唱将', cost: 2500, ratingBoost: 2, passerbyBoost: 0.07, cpBoost: 0.10, soloBoost: 0.05 },
-        cList: { name: '三线艺人', cost: 1000, ratingBoost: 0.5, passerbyBoost: 0.03, cpBoost: 0.05, soloBoost: 0.02 },
-        influencer: { name: '素人网红', cost: 400, ratingBoost: 0, passerbyBoost: 0, cpBoost: 0.02, soloBoost: 0.01 }
+        star: { name: '当红爱豆', cost: 4000, ratingBoost: 3, passerbyBoost: 0.10, cpBoost: 0.07, soloBoost: 0.07 },
+        singer: { name: '实力唱将', cost: 2500, ratingBoost: 2, passerbyBoost: 0.07, cpBoost: 0.05, soloBoost: 0.05 },
+        cList: { name: '三线艺人', cost: 1000, ratingBoost: 0.5, passerbyBoost: 0.03, cpBoost: 0.01, soloBoost: 0.02 },
+        influencer: { name: '素人网红', cost: 400, ratingBoost: 0, passerbyBoost: 0, cpBoost: 0.01, soloBoost: 0.01 }
       };
 
       const config = artistConfig[artistType];
@@ -1423,11 +1445,6 @@
 
       if (this.state.funds < config.cost) {
         return { success: false, message: '资金不足，需要' + config.cost + '万' };
-      }
-
-      // 检查是否已邀请同类型
-      if (this.state.invitedArtists.find(a => a.type === artistType)) {
-        return { success: false, message: '本期已邀请过' + config.name };
       }
 
       this.state.funds -= config.cost;
@@ -1458,10 +1475,10 @@
 
     getArtistOptions() {
       return [
-        { type: 'star', name: '当红爱豆', cost: 4000, desc: '收视率+3pp，路人粉+10%，CP粉+15%，唯粉+5%' },
-        { type: 'singer', name: '实力唱将', cost: 2500, desc: '收视率+2pp，路人粉+7%，CP粉+10%，唯粉+5%' },
-        { type: 'cList', name: '三线艺人', cost: 1000, desc: '收视率+0.5pp，路人粉+3%，CP粉+5%，唯粉+2%' },
-        { type: 'influencer', name: '素人网红', cost: 400, desc: '收视率无增益，CP粉+2%，唯粉+1%' }
+        { type: 'star', name: '当红爱豆', cost: 4000, desc: '收视率+3pp，路人粉+10%，CP粉+7%，唯粉+7%' },
+        { type: 'singer', name: '实力唱将', cost: 2500, desc: '收视率+2pp，路人粉+7%，CP粉+5%，唯粉+5%' },
+        { type: 'cList', name: '三线艺人', cost: 1000, desc: '收视率+0.5pp，路人粉+3%，CP粉+1%，唯粉+2%' },
+        { type: 'influencer', name: '素人网红', cost: 400, desc: '收视率无增益，CP粉+1%，唯粉+1%' }
       ];
     }
 
@@ -3827,13 +3844,6 @@
 
       // 应用邀请艺人效果（收视率加成先于_updateRatings，粉丝加成在自然涨粉后）
       const activeTrainees = this.state.trainees.filter(t => !t.eliminated);
-
-      // 不邀请艺人的惩罚
-      if (currentInvitedArtists.length === 0 && this.state.episode > 1) {
-        for (const t of activeTrainees) {
-          t.fans.passerby = Math.round(t.fans.passerby * 0.90);
-        }
-      }
 
       // 应用邀请艺人粉丝加成（在_updateRatings之前，因为ratings依赖粉丝数）
       for (const artist of currentInvitedArtists) {
