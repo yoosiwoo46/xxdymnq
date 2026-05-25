@@ -600,6 +600,9 @@
       // 计算赞助商广告时长
       this.state.sponsorAdTime = this.calculateSponsorAdTime();
 
+      // 生成对赌协议（筹备阶段就生成）
+      this._generateGambleAgreements();
+
       return this.state;
     }
 
@@ -3793,11 +3796,6 @@
 
     nextEpisode() {
       if (!this.state) return { success: false, message: '游戏未初始化' };
-
-      // 第一期开始前生成对赌协议
-      if (this.state.episode === 1 && (!this.state.gambleAgreements || this.state.gambleAgreements.length === 0)) {
-        this._generateGambleAgreements();
-      }
 
       this.state.episodeTimeUsed = 0;
       this.state.btsTimeUsed = 0;
