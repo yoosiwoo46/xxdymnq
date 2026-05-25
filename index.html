@@ -1854,6 +1854,12 @@ body { display: flex; justify-content: center; align-items: center; }
       <div id="sponsorList"></div>
     </div>
 
+    <!-- 对赌协议 -->
+    <div class="prep-section" id="gambleSection" style="display:none;">
+      <div class="prep-section-title">⚠️ 对赌协议</div>
+      <div id="gambleList" style="font-size:12px;color:var(--text-secondary);"></div>
+    </div>
+
     <div class="prep-section">
       <div class="prep-section-title">导师选择（点击雇佣）</div>
       <div class="card-grid" id="mentorPool"></div>
@@ -2116,6 +2122,12 @@ body { display: flex; justify-content: center; align-items: center; }
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- 邀请外部艺人 -->
+    <div class="op-section">
+      <div class="op-section-title">邀请外部艺人</div>
+      <div id="inviteArtistPanel"></div>
     </div>
 
     <!-- 自动热搜 -->
@@ -2593,6 +2605,21 @@ body { display: flex; justify-content: center; align-items: center; }
     renderPrepVenue();
     renderPrepStaff();
     renderPrepTraineeConfirm();
+
+    // 渲染对赌协议
+    const gambleAgreements = engine.getGambleAgreements ? engine.getGambleAgreements() : [];
+    const gambleSection = $('gambleSection');
+    if (gambleSection && gambleAgreements.length > 0) {
+      gambleSection.style.display = 'block';
+      $('gambleList').innerHTML = gambleAgreements.map(g =>
+        '<div style="padding:6px 10px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;margin-bottom:4px;">' +
+          '<span style="color:var(--gold);font-weight:600;">' + g.traineeName + '</span> ' +
+          '<span style="color:var(--danger);">【对赌】</span> ' +
+          g.source + '要求：' + g.requirementLabel + ' ' +
+          '<span style="color:var(--text-muted);">（违约金3000万）</span>' +
+        '</div>'
+      ).join('');
+    }
   }
 
   function renderMentorPool() {
@@ -2686,12 +2713,12 @@ body { display: flex; justify-content: center; align-items: center; }
   function renderSponsorCategories(container, categories, signedTypes, typeIcons) {
     let html = '';
     for (const [type, data] of Object.entries(categories)) {
-      const isRestricted = signedTypes.has(type);
+      const isRestricted = new Set(['金融', '汽车']).has(type) && signedTypes.has(type);
       html += `<div class="sponsor-category" style="margin-bottom:16px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
           <span style="font-size:16px;">${typeIcons[type] || '📋'}</span>
           <span style="font-weight:600;color:var(--text-primary);">${type}品牌</span>
-          ${isRestricted ? '<span style="color:var(--warning);font-size:11px;">⚠️ 同类型品牌只能选择一个</span>' : ''}
+          ${isRestricted ? '<span style="color:var(--warning);font-size:11px;">⚠️ ' + type + '类品牌只能选择一个</span>' : ''}
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;">`;
 
@@ -2699,7 +2726,6 @@ body { display: flex; justify-content: center; align-items: center; }
         const canSign = !(isRestricted);
         html += `<div class="card sponsor-card ${canSign ? '' : 'disabled'}" data-sponsor-id="${sponsor.id}" style="opacity:${canSign ? '1' : '0.5'};padding:10px;">
           <div class="name">${sponsor.name}</div>
-          <div class="info">要求：${(sponsor.requirements || []).join('、')}</div>
           <div class="amount">+${fmtMoney(sponsor.amount)}万</div>
           <button class="btn btn-sm btn-success sponsor-sign-btn" data-id="${sponsor.id}" ${canSign ? '' : 'disabled'}>签约</button>
         </div>`;
@@ -4323,6 +4349,7 @@ body { display: flex; justify-content: center; align-items: center; }
     renderEditStats();
     renderBusiness();
     renderMerch();
+    renderInviteArtistPanel();
   }
 
   function renderMarketingPanel() {
@@ -4335,6 +4362,40 @@ body { display: flex; justify-content: center; align-items: center; }
     updateMktTraineeDropdown(searchInput ? searchInput.value : '');
     updateMktPreview();
     updateCPPartnerSelect();
+  }
+
+  function renderInviteArtistPanel() {
+    const panel = $('inviteArtistPanel');
+    if (!panel) return;
+
+    const options = engine.getArtistOptions ? engine.getArtistOptions() : [];
+    const invited = engine.getInvitedArtists ? engine.getInvitedArtists() : [];
+    const funds = engine.getFunds ? engine.getFunds() : 0;
+
+    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;">';
+
+    for (const opt of options) {
+      const isInvited = invited.find(a => a.type === opt.type);
+      const canAfford = funds >= opt.cost;
+
+      html += `<div class="card" style="padding:10px;${isInvited ? 'border-color:var(--success);opacity:0.7;' : ''}${!canAfford && !isInvited ? 'opacity:0.4;pointer-events:none;' : ''}">
+        <div style="font-weight:600;font-size:13px;">${opt.name}</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${opt.desc}</div>
+        <div style="font-size:13px;color:var(--warning);font-weight:600;margin-top:4px;">${opt.cost}万</div>
+        ${isInvited
+          ? '<div style="color:var(--success);font-size:11px;margin-top:4px;">✓ 已邀请</div>'
+          : `<button class="btn btn-sm btn-success invite-artist-btn" data-type="${opt.type}" style="margin-top:4px;">邀请</button>`
+        }
+      </div>`;
+    }
+
+    html += '</div>';
+
+    if (invited.length > 0) {
+      html += '<div style="margin-top:8px;font-size:11px;color:var(--text-muted);">本期已邀请：' + invited.map(a => a.name).join('、') + '</div>';
+    }
+
+    panel.innerHTML = html;
   }
 
   function updateMktTraineeDropdown(keyword) {
@@ -4492,36 +4553,26 @@ body { display: flex; justify-content: center; align-items: center; }
       container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">本期无商务机会</div>';
       return;
     }
-    const trainees = engine.getTrainees ? engine.getTrainees() : [];
     container.innerHTML = businessData.map(b => {
-      const specifiedId = b.specifiedTraineeId || null;
-      const specifiedTrainee = specifiedId ? trainees.find(t => t.id === specifiedId) : null;
       const isAccepted = b.accepted;
       const isRejected = b.rejected;
       const isGray = isAccepted || isRejected;
-      const statusLabel = isAccepted ? '<span style="color:var(--success);font-weight:600;font-size:11px;margin-left:8px;">已接受</span>' : (isRejected ? '<span style="color:var(--danger);font-weight:600;font-size:11px;margin-left:8px;">已拒绝</span>' : '');
-      return `<div class="card business-card" data-biz-id="${b.id}" style="${isGray ? 'opacity:0.5;pointer-events:none;' : ''}">
-        <div class="bc-info">
-          <div class="bc-name">${b.name}${specifiedTrainee ? ' <span style="color:var(--gold);font-size:11px;">指定：${specifiedTrainee.name}</span>' : ''}${statusLabel}</div>
-          <div class="bc-desc">${b.description}</div>
-          ${!isGray ? `<div style="margin-top:8px;font-size:11px;color:var(--text-secondary);">选择参与练习生（最多${b.maxPeople || 3}人）：</div>
-          <input type="text" class="biz-trainee-search" data-biz-id="${b.id}" placeholder="搜索姓名/公司..." autocomplete="off" style="width:100%;margin-top:4px;padding:4px 8px;border:1px solid var(--border-color);border-radius:var(--radius);background:var(--bg-primary);color:var(--text-primary);font-size:11px;box-sizing:border-box;">
-          <div class="biz-trainee-list" data-biz-id="${b.id}" style="max-height:120px;overflow-y:auto;margin-top:4px;">
-            ${trainees.filter(t => !t.eliminated).map(t => {
-              const isSpecified = t.id === specifiedId;
-              return `<label style="display:flex;align-items:center;gap:4px;padding:2px 0;font-size:12px;color:var(--text-primary);cursor:pointer;">
-              <input type="checkbox" class="biz-trainee-cb" data-biz-id="${b.id}" data-trainee-id="${t.id}" ${isSpecified ? 'checked disabled' : ''}>
-              ${traineeNameWithLabel(t)} (${t.rank}名)${isSpecified ? ' ★' : ''}
-            </label>`;
-            }).join('')}
-          </div>` : ''}
-        </div>
-        <div class="bc-revenue">+${fmtMoney(b.revenue)}万</div>
-        ${!isGray ? `<div class="bc-actions">
-          <button class="btn btn-success btn-sm biz-accept" data-biz-id="${b.id}">接受</button>
-          <button class="btn btn-danger btn-sm biz-reject" data-biz-id="${b.id}">拒绝</button>
-        </div>` : ''}
-      </div>`;
+      const statusLabel = isAccepted ? '<span style="color:var(--success);font-weight:600;font-size:11px;margin-left:8px;">✓ 已接受</span>' : (isRejected ? '<span style="color:var(--text-muted);font-size:11px;margin-left:8px;">✗ 已拒绝</span>' : '');
+      return `<div class="card business-card" data-biz-id="${b.id}" style="${isGray ? 'opacity:0.5;pointer-events:none;' : ''}padding:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div style="font-weight:600;font-size:13px;">${b.name}${statusLabel}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${b.description}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:14px;color:var(--success);font-weight:600;">+${fmtMoney(b.revenue)}万</div>
+                    ${!isGray ? `<div style="display:flex;gap:4px;margin-top:4px;">
+                        <button class="btn btn-success btn-sm biz-accept" data-biz-id="${b.id}">接受</button>
+                        <button class="btn btn-outline btn-sm biz-reject" data-biz-id="${b.id}">拒绝</button>
+                    </div>` : ''}
+                </div>
+            </div>
+        </div>`;
     }).join('');
   }
 
@@ -5047,6 +5098,17 @@ body { display: flex; justify-content: center; align-items: center; }
       '<div style="font-size:24px;font-weight:700;">' + progEval.programTag + '</div>' +
       '</div>' : '') +
 
+      // 导演风格评价
+      (progEval.directorTags && progEval.directorTags.length > 0 ? '<div style="margin-bottom:24px;">' +
+      '<h3 style="color:var(--gold);margin-bottom:12px;">🎬 导演风格评价</h3>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
+      progEval.directorTags.map(t => '<div style="padding:8px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;text-align:center;">' +
+      '<div style="font-size:24px;">' + t.icon + '</div>' +
+      '<div style="font-weight:700;font-size:13px;margin-top:4px;">' + t.label + '</div>' +
+      '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">' + t.desc + '</div>' +
+      '</div>').join('') +
+      '</div></div>' : '') +
+
       // 选手评价：你好恨他
       (progEval.hateTop3 && progEval.hateTop3.length > 0 ? '<div style="margin-bottom:24px;">' +
       '<h3 style="color:var(--danger);margin-bottom:12px;">😡 你好恨他（问题类剪辑TOP3）</h3>' +
@@ -5090,6 +5152,8 @@ body { display: flex; justify-content: center; align-items: center; }
       '<div>总支出: <span style="color:var(--danger);">' + fmtMoney(settlement.totalExpense || 0) + '万</span></div>' +
       '<div>净利润: <span style="color:var(--gold);">' + fmtMoney(settlement.netProfit || 0) + '万</span></div>' +
       '<div>赞助商赔偿: ' + fmtMoney(settlement.totalPenalty || 0) + '万</div>' +
+      '<div>对赌违约金: <span style="color:' + (settlement.gamblePenalty > 0 ? 'var(--danger)' : 'var(--success)') + ';">' + fmtMoney(settlement.gamblePenalty || 0) + '万</span></div>' +
+      '<div>对赌达成: ' + (settlement.gambleAchieved || 0) + '/' + (settlement.gambleTotal || 0) + '</div>' +
       '<div>最终资金: <span style="color:var(--gold);">' + fmtMoney(settlement.finalFunds || 0) + '万</span></div>' +
       '</div></div>' +
 
@@ -5773,48 +5837,22 @@ body { display: flex; justify-content: center; align-items: center; }
       });
     });
 
-    // 商务练习生搜索（事件委托）
-    $('businessList').addEventListener('input', function(e) {
-      if (!e.target.classList.contains('biz-trainee-search')) return;
-      const bizId = e.target.dataset.bizId;
-      const keyword = e.target.value.trim().toLowerCase();
-      const listEl = e.target.parentElement.querySelector('.biz-trainee-list');
-      if (!listEl) return;
-      const labels = listEl.querySelectorAll('label');
-      labels.forEach(label => {
-        const text = label.textContent.toLowerCase();
-        label.style.display = (!keyword || text.includes(keyword)) ? '' : 'none';
-      });
-    });
-
     // 商务接受/拒绝（事件委托）
     $('businessList').addEventListener('click', function(e) {
-      const acceptBtn = e.target.closest('.biz-accept');
-      const rejectBtn = e.target.closest('.biz-reject');
-      if (acceptBtn) {
-        const bizId = acceptBtn.dataset.bizId;
-        const card = acceptBtn.closest('.business-card');
-        const checkboxes = card.querySelectorAll('.biz-trainee-cb:checked');
-        const traineeIds = Array.from(checkboxes).map(cb => parseInt(cb.dataset.traineeId));
-        if (traineeIds.length === 0) {
-          showToast('请选择参与练习生', 'warning');
-          return;
+      if (e.target.classList.contains('biz-accept')) {
+        const bizId = e.target.dataset.bizId;
+        const result = engine.acceptBusiness(bizId);
+        showToast(result.message, result.success ? 'success' : 'error');
+        if (result.success) {
+          updateFundsDisplay();
+          renderBusiness();
         }
-        if (engine.acceptBusiness) {
-          const result = engine.acceptBusiness(bizId, traineeIds);
-          showToast(result.message, result.success ? 'success' : 'error');
-          if (result.success) {
-            const biz = businessData.find(b => String(b.id) === String(bizId));
-            if (biz) biz.accepted = true;
-            renderBusiness();
-          }
-        }
-      } else if (rejectBtn) {
-        const bizId = rejectBtn.dataset.bizId;
-        const biz = businessData.find(b => String(b.id) === String(bizId));
-        if (biz) biz.rejected = true;
-        renderBusiness();
-        showToast('已拒绝该商务机会', 'info');
+      }
+      if (e.target.classList.contains('biz-reject')) {
+        const bizId = e.target.dataset.bizId;
+        const result = engine.rejectBusiness(bizId);
+        showToast(result.message, result.success ? 'success' : 'error');
+        if (result.success) renderBusiness();
       }
     });
 
@@ -5840,6 +5878,19 @@ body { display: flex; justify-content: center; align-items: center; }
           const result = engine.handleScandal(scandalId, method);
           showToast(result.message, result.success ? 'success' : 'warning');
           renderOperation();
+        }
+      }
+    });
+
+    // 邀请外部艺人（事件委托）
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('invite-artist-btn')) {
+        const type = e.target.dataset.type;
+        const result = engine.inviteArtist(type);
+        showToast(result.message, result.success ? 'success' : 'error');
+        if (result.success) {
+          $('opFunds').textContent = fmtMoney(engine.getFunds ? engine.getFunds() : 0);
+          renderInviteArtistPanel();
         }
       }
     });

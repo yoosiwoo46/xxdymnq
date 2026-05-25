@@ -581,7 +581,12 @@
         focusedTraineeIds: new Set(),
         scandals: [],
         unhandledScandals: 0,
-        usedSongNames: new Set()
+        usedSongNames: new Set(),
+        gambleAgreements: [],  // 对赌协议列表
+        totalInviteCost: 0,    // 邀请艺人累计花费
+        totalMarketingCount: 0, // 购买营销次数
+        totalBusinessAccept: 0, // 接受商务次数
+        invitedArtists: []
       };
 
       this._initSponsorRequirements();
@@ -953,7 +958,7 @@
             name: name,
             type: type,
             amount: amount,
-            requirements: pickN(SPONSOR_REQUIREMENTS, randInt(1, 2)),
+            requirements: [],
             satisfaction: 50
           });
         }
@@ -1179,38 +1184,14 @@
       if (this.state.signedSponsors.find(s => s.id === sponsorId)) {
         return { success: false, message: '已签约该赞助商' };
       }
-      if (this.state.signedSponsors.some(s => s.type === sponsor.type)) {
+      const mutuallyExclusiveTypes = new Set(['金融', '汽车']);
+      if (mutuallyExclusiveTypes.has(sponsor.type) && this.state.signedSponsors.some(s => s.type === sponsor.type)) {
         const existing = this.state.signedSponsors.find(s => s.type === sponsor.type);
-        return { success: false, message: `同类型只能选择一个，已签约${existing.name}（${sponsor.type}）` };
+        return { success: false, message: `${sponsor.type}类品牌只能选择一个，已签约${existing.name}` };
       }
       this.state.funds += sponsor.amount;
       this.state.totalRevenue += sponsor.amount;
       this.state.signedSponsors.push({ ...sponsor, signedEpisode: this.state.episode });
-      for (const req of sponsor.requirements) {
-        this.state.sponsorRequirements.push({
-          id: generateId(),
-          sponsorId: sponsor.id,
-          sponsorName: sponsor.name,
-          requirement: req,
-          achieved: false,
-          achievedEpisode: null,
-          firstMissedEpisode: null,
-          compensationRequired: false
-        });
-        if (req === '参与节目') {
-          // 每家赞助商塞人0-2人，总数不超过10人
-          const currentCount = this.state.sponsorRequiredTraineeIds.size;
-          if (currentCount >= 10) continue; // 已达上限，不再塞人
-          const activeTrainees = this.state.trainees.filter(t => !t.eliminated && !this.state.sponsorRequiredTraineeIds.has(t.id));
-          if (activeTrainees.length === 0) continue;
-          const maxCount = Math.min(2, 10 - currentCount, activeTrainees.length);
-          const count = randInt(0, maxCount); // 0-2人
-          const selected = pickN(activeTrainees, count);
-          for (const t of selected) {
-            this.state.sponsorRequiredTraineeIds.add(t.id);
-          }
-        }
-      }
       this.state.sponsorAdTime = this.calculateSponsorAdTime();
       return { success: true, message: `成功签约赞助商 ${sponsor.name}，获得${sponsor.amount}万`, sponsor: sponsor };
     }
@@ -1422,6 +1403,65 @@
       return { success: true, message: `批量剪辑涨粉完成，共处理${results.length}人`, results: results };
     }
 
+    // ========== 邀请外部艺人 ==========
+
+    inviteArtist(artistType) {
+      if (!this.state) return { success: false, message: '游戏未初始化' };
+
+      const artistConfig = {
+        star: { name: '当红爱豆', cost: 4000, ratingBoost: 3, passerbyBoost: 0.10, cpBoost: 0.15, soloBoost: 0.05 },
+        singer: { name: '实力唱将', cost: 2500, ratingBoost: 2, passerbyBoost: 0.07, cpBoost: 0.10, soloBoost: 0.05 },
+        cList: { name: '三线艺人', cost: 1000, ratingBoost: 0.5, passerbyBoost: 0.03, cpBoost: 0.05, soloBoost: 0.02 },
+        influencer: { name: '素人网红', cost: 400, ratingBoost: 0, passerbyBoost: 0, cpBoost: 0.02, soloBoost: 0.01 }
+      };
+
+      const config = artistConfig[artistType];
+      if (!config) return { success: false, message: '无效的艺人类型' };
+
+      if (this.state.funds < config.cost) {
+        return { success: false, message: '资金不足，需要' + config.cost + '万' };
+      }
+
+      // 检查是否已邀请同类型
+      if (this.state.invitedArtists.find(a => a.type === artistType)) {
+        return { success: false, message: '本期已邀请过' + config.name };
+      }
+
+      this.state.funds -= config.cost;
+      this.state.totalExpense += config.cost;
+      this.state.totalInviteCost += config.cost;
+
+      const artist = {
+        id: generateId(),
+        type: artistType,
+        name: config.name,
+        cost: config.cost,
+        ratingBoost: config.ratingBoost,
+        passerbyBoost: config.passerbyBoost,
+        cpBoost: config.cpBoost,
+        soloBoost: config.soloBoost,
+        episode: this.state.episode
+      };
+
+      this.state.invitedArtists.push(artist);
+
+      return { success: true, message: '成功邀请' + config.name + '，花费' + config.cost + '万', artist: artist };
+    }
+
+    getInvitedArtists() {
+      if (!this.state) return [];
+      return this.state.invitedArtists || [];
+    }
+
+    getArtistOptions() {
+      return [
+        { type: 'star', name: '当红爱豆', cost: 4000, desc: '收视率+3pp，路人粉+10%，CP粉+15%，唯粉+5%' },
+        { type: 'singer', name: '实力唱将', cost: 2500, desc: '收视率+2pp，路人粉+7%，CP粉+10%，唯粉+5%' },
+        { type: 'cList', name: '三线艺人', cost: 1000, desc: '收视率+0.5pp，路人粉+3%，CP粉+5%，唯粉+2%' },
+        { type: 'influencer', name: '素人网红', cost: 400, desc: '收视率无增益，CP粉+2%，唯粉+1%' }
+      ];
+    }
+
     calculateVotePower(trainee) {
       return trainee.fans.solo * 5000 + trainee.fans.cp * 3000 + trainee.fans.passerby * 100;
     }
@@ -1562,6 +1602,7 @@
       }
       this.state.funds -= config.cost;
       this.state.totalExpense += config.cost;
+      this.state.totalMarketingCount = (this.state.totalMarketingCount || 0) + 1;
 
       const nobodyCaresRate = config.nobodyCaresRate || 0;
       if (Math.random() < nobodyCaresRate) {
@@ -1841,24 +1882,19 @@
       return opportunities;
     }
 
-    acceptBusiness(businessId, traineeIds) {
+    acceptBusiness(businessId) {
       if (!this.state) return { success: false, message: '游戏未初始化' };
       const business = this._businessOpportunities.find(b => b.id === businessId);
       if (!business) return { success: false, message: '商务机会不存在' };
-      let ids = Array.isArray(traineeIds) ? [...traineeIds] : (traineeIds ? [traineeIds] : []);
+      if (business.accepted) return { success: false, message: '已接受该商务' };
 
-      if (business.specifiedTraineeId && !ids.includes(business.specifiedTraineeId)) {
-        ids.push(business.specifiedTraineeId);
-      }
-
-      if (ids.length === 0) return { success: false, message: '未选择练习生' };
-      if (ids.length > business.maxPeople) {
-        return { success: false, message: `最多${business.maxPeople}人参与` };
-      }
-      const trainees = ids.map(id => this.state.trainees.find(t => t.id === id)).filter(Boolean);
       this.state.funds += business.revenue;
       this.state.totalRevenue += business.revenue;
-      for (const trainee of trainees) {
+      this.state.totalBusinessAccept = (this.state.totalBusinessAccept || 0) + 1;
+
+      // 对所有未淘汰练习生生效
+      const activeTrainees = this.state.trainees.filter(t => !t.eliminated);
+      for (const trainee of activeTrainees) {
         if (business.type === 'promotion') {
           const change = Math.round(trainee.fans.passerby * business.effect.passerby);
           trainee.fans.passerby = Math.min(trainee.fans.passerby + change, business.effect.limit);
@@ -1867,22 +1903,33 @@
           trainee.fans.solo = Math.min(trainee.fans.solo + change, business.effect.limit);
         }
       }
+
       for (const sponsor of this.state.signedSponsors) {
         if (Math.random() < 0.3) {
           sponsor.satisfaction = clamp(sponsor.satisfaction + randInt(1, 5), 0, 100);
         }
       }
+
       business.accepted = true;
       this.state.lockedBusiness.push({
-        ...business, traineeIds: ids,
-        traineeNames: trainees.map(t => t.name), episode: this.state.episode
+        ...business, traineeIds: activeTrainees.map(t => t.id),
+        traineeNames: activeTrainees.map(t => t.name), episode: this.state.episode
       });
+
       return {
         success: true,
-        message: `商务合作完成，收入${business.revenue}万`,
-        revenue: business.revenue,
-        trainees: trainees.map(t => t.name)
+        message: `商务合作完成，收入${business.revenue}万，所有练习生受益`,
+        revenue: business.revenue
       };
+    }
+
+    rejectBusiness(businessId) {
+      if (!this.state) return { success: false, message: '游戏未初始化' };
+      const business = this._businessOpportunities.find(b => b.id === businessId);
+      if (!business) return { success: false, message: '商务机会不存在' };
+      if (business.accepted) return { success: false, message: '已接受该商务' };
+      business.rejected = true;
+      return { success: true, message: '已拒绝该商务机会' };
     }
 
     getTraineeCoreAbility(traineeId) {
@@ -2690,6 +2737,45 @@
       };
     }
 
+    _generateGambleAgreements() {
+      const count = randInt(2, 4);
+      const activeTrainees = this.state.trainees.filter(t => !t.eliminated);
+      const selected = pickN(activeTrainees, Math.min(count, activeTrainees.length));
+      const requirementTypes = [
+        { type: 'survive_60', label: '60强不被淘汰', check: (rank) => rank <= 60 },
+        { type: 'survive_35', label: '35强不被淘汰', check: (rank) => rank <= 35 },
+        { type: 'survive_20', label: '20强不被淘汰', check: (rank) => rank <= 20 },
+        { type: 'debut', label: '最终必须出道', check: (rank) => rank <= 11 }
+      ];
+      for (const t of selected) {
+        const req = pick(requirementTypes);
+        const source = Math.random() < 0.5 ? '赞助商' : '娱乐公司';
+        this.state.gambleAgreements.push({
+          id: generateId(),
+          traineeId: t.id,
+          traineeName: t.name,
+          requirementType: req.type,
+          requirementLabel: req.label,
+          checkFn: req.check,
+          source: source,
+          achieved: false,
+          penalty: 3000
+        });
+        t.hasGamble = true;
+        t.gambleLabel = '【对赌】' + req.label;
+      }
+    }
+
+    getGambleAgreements() {
+      if (!this.state) return [];
+      return this.state.gambleAgreements || [];
+    }
+
+    getAllGambleAchieved() {
+      if (!this.state || !this.state.gambleAgreements) return false;
+      return this.state.gambleAgreements.length > 0 && this.state.gambleAgreements.every(g => g.achieved);
+    }
+
     getFinalSettlement() {
       if (!this.state) return null;
 
@@ -2704,6 +2790,23 @@
       const penalties = this.state.sponsorPenalties || [];
       const totalPenalty = penalties.reduce((sum, p) => sum + (p.penaltyAmount || p.amount || 0), 0);
 
+      // 对赌协议结算
+      let gamblePenalty = 0;
+      let gambleAchieved = 0;
+      let gambleTotal = this.state.gambleAgreements.length;
+      for (const g of this.state.gambleAgreements) {
+        const trainee = this.state.trainees.find(t => t.id === g.traineeId);
+        if (trainee) {
+          const rank = trainee.currentRank || trainee.rank;
+          if (g.checkFn(rank)) {
+            g.achieved = true;
+            gambleAchieved++;
+          }
+        }
+      }
+      const gambleFailed = gambleTotal - gambleAchieved;
+      gamblePenalty = gambleFailed * 3000;
+
       return {
         debuted: debuted.map(t => ({ id: t.id, name: t.name, rank: t.currentRank || t.rank })),
         eliminated: eliminated.map(t => ({ id: t.id, name: t.name })),
@@ -2711,6 +2814,9 @@
         totalExpense: totalExpense,
         netProfit: netProfit,
         totalPenalty: totalPenalty,
+        gamblePenalty: gamblePenalty,
+        gambleAchieved: gambleAchieved,
+        gambleTotal: gambleTotal,
         finalFunds: this.state.funds,
         ratings: this.state.ratings,
         reputation: this.state.reputation,
@@ -3687,6 +3793,12 @@
 
     nextEpisode() {
       if (!this.state) return { success: false, message: '游戏未初始化' };
+
+      // 第一期开始前生成对赌协议
+      if (this.state.episode === 1 && (!this.state.gambleAgreements || this.state.gambleAgreements.length === 0)) {
+        this._generateGambleAgreements();
+      }
+
       this.state.episodeTimeUsed = 0;
       this.state.btsTimeUsed = 0;
       this._currentEvents = [];
@@ -3710,8 +3822,39 @@
       }
 
       this.state.episode++;
+
+      // 保存本期邀请的艺人（重置前），用于应用效果
+      const currentInvitedArtists = this.state.invitedArtists || [];
+      this.state.invitedArtists = [];
+
+      // 应用邀请艺人效果（收视率加成先于_updateRatings，粉丝加成在自然涨粉后）
+      const activeTrainees = this.state.trainees.filter(t => !t.eliminated);
+
+      // 不邀请艺人的惩罚
+      if (currentInvitedArtists.length === 0 && this.state.episode > 1) {
+        for (const t of activeTrainees) {
+          t.fans.passerby = Math.round(t.fans.passerby * 0.90);
+        }
+      }
+
+      // 应用邀请艺人粉丝加成（在_updateRatings之前，因为ratings依赖粉丝数）
+      for (const artist of currentInvitedArtists) {
+        for (const t of activeTrainees) {
+          t.fans.passerby = Math.round(t.fans.passerby * (1 + (artist.passerbyBoost || 0)));
+          t.fans.cp = Math.round(t.fans.cp * (1 + (artist.cpBoost || 0)));
+          t.fans.solo = Math.round(t.fans.solo * (1 + (artist.soloBoost || 0)));
+        }
+      }
+
       this._updateProgramFans();
       this._updateRatings();
+
+      // 邀请艺人收视率加成（在_updateRatings之后叠加）
+      for (const artist of currentInvitedArtists) {
+        this.state.ratings += (artist.ratingBoost || 0);
+      }
+      this.state.ratings = clamp(this.state.ratings, 0.1, 5.0);
+
       this.applyNaturalFanGrowth();
       this._updateSponsorSatisfaction();
       this.updateSponsorStatus();
@@ -4112,7 +4255,63 @@
         ghostTop3.push({ ...t, tag: '🤔 疑似参赛' });
       }
 
-      return { programTag, hateTop3, royalTop3, ghostTop3 };
+      return { programTag, hateTop3, royalTop3, ghostTop3, directorTags: this._getDirectorTags() };
+    }
+
+    _getDirectorTags() {
+      const tags = [];
+      const state = this.state;
+
+      // (1) 购买营销超过20次：买粉达人
+      if ((state.totalMarketingCount || 0) > 20) {
+        tags.push({ icon: '📢', label: '买粉达人', desc: '购买营销超过20次' });
+      }
+
+      // (2) 接受商务超过20次：生财有道
+      if ((state.totalBusinessAccept || 0) > 20) {
+        tags.push({ icon: '💰', label: '生财有道', desc: '接受商务超过20次' });
+      }
+
+      // (3) 突出问题类剪辑超过50次：恶剪专家
+      const counts = state.totalEditCounts || { problem: 0, ability: 0, cp: 0 };
+      if ((counts.problem || 0) > 50) {
+        tags.push({ icon: '🔪', label: '恶剪专家', desc: '突出问题类剪辑超过50次' });
+      }
+
+      // (4) CP类剪辑超过40次：恋综预备
+      if ((counts.cp || 0) > 40) {
+        tags.push({ icon: '💕', label: '恋综预备', desc: 'CP类剪辑超过40次' });
+      }
+
+      // (5) 突出能力类剪辑超过50次：皆大欢喜
+      if ((counts.ability || 0) > 50) {
+        tags.push({ icon: '🎉', label: '皆大欢喜', desc: '突出能力类剪辑超过50次' });
+      }
+
+      // (6) 邀请艺人累计花费超过6000万：豪华阵容
+      if ((state.totalInviteCost || 0) > 6000) {
+        tags.push({ icon: '🌟', label: '豪华阵容', desc: '邀请艺人累计花费超过6000万' });
+      }
+
+      // (7) 达成所有对赌协议：迫于生计
+      if (this.getAllGambleAchieved()) {
+        tags.push({ icon: '😰', label: '迫于生计', desc: '达成所有对赌协议' });
+      }
+
+      // (8) 筹备阶段签约6家以上赞助商：金牌销售
+      if ((state.signedSponsors || []).length >= 6) {
+        tags.push({ icon: '🏆', label: '金牌销售', desc: '签约6家以上赞助商' });
+      }
+
+      // (9) 最终出道成团11人中有3个及以上A等级：国民PD
+      const rankings = this.getCurrentRankings ? this.getCurrentRankings() : [];
+      const debuted = rankings.slice(0, 11);
+      const gradeACount = debuted.filter(t => t.grade === 'A' || t.grade === 'S' || t.grade === 'SS' || t.grade === 'SSS').length;
+      if (gradeACount >= 3) {
+        tags.push({ icon: '🎯', label: '国民PD', desc: '出道成团中有3个及以上A等级练习生' });
+      }
+
+      return tags;
     }
 
     // ========== 未来3年发展模拟 ==========
